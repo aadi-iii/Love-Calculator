@@ -18,3 +18,9 @@ Instead of generating a random result, this calculator includes small interactiv
 
 ## 😄 Note
 This project was created for fun and learning purposes.
+
+## 📸 Preview
+
+![Screenshot 1](LOVE CALCULATOR.jpeg)
+
+![Screenshot 2](LOVE CALC.jpeg)

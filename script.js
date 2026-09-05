@@ -10,6 +10,103 @@ let gameState = {
     finalPercentage: 0
 };
 
+// ============= NAVIGATION & MOBILE MENU =============
+const screenMap = {
+    'home': 'welcomeScreen',
+    'how-it-works': 'howItWorksScreen',
+    'fun': 'funScreen',
+    'contact': 'contactScreen'
+};
+
+function navigateTo(screenKey) {
+    const targetScreenId = screenMap[screenKey] || 'welcomeScreen';
+    
+    // Check if user is currently in the middle of a mini-game
+    const currentActiveScreen = document.querySelector('.screen.active');
+    if (currentActiveScreen) {
+        const activeId = currentActiveScreen.id;
+        if (['game1Screen', 'game2Screen', 'game3Screen'].includes(activeId)) {
+            const confirmLeave = confirm('Are you sure you want to leave the active game? Your progress will be reset. 💕');
+            if (!confirmLeave) return;
+        }
+    }
+
+    // Close mobile menu if open
+    closeMobileMenu();
+
+    // Hide all screens
+    document.querySelectorAll('.screen').forEach(screen => {
+        screen.classList.remove('active');
+    });
+
+    // Show target screen
+    const targetElement = document.getElementById(targetScreenId);
+    if (targetElement) {
+        targetElement.classList.add('active');
+    }
+
+    // Update nav active link state
+    document.querySelectorAll('.nav-links .nav-item').forEach(navItem => {
+        if (navItem.getAttribute('data-screen') === screenKey) {
+            navItem.classList.add('active');
+        } else {
+            navItem.classList.remove('active');
+        }
+    });
+
+    // Scroll to top of container smoothly
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function toggleMobileMenu() {
+    const hamburger = document.getElementById('hamburgerBtn');
+    const navLinks = document.getElementById('navLinks');
+    
+    hamburger.classList.toggle('active');
+    navLinks.classList.toggle('active');
+}
+
+function closeMobileMenu() {
+    const hamburger = document.getElementById('hamburgerBtn');
+    const navLinks = document.getElementById('navLinks');
+    
+    if (hamburger) hamburger.classList.remove('active');
+    if (navLinks) navLinks.classList.remove('active');
+}
+
+// ============= FUN SCREEN: LOVE FACT GENERATOR =============
+const loveFacts = [
+    "When two people in love look into each other's eyes for 3 minutes, their heartbeats sync up naturally!",
+    "Falling in love releases dopamine, oxytocin, and adrenaline — creating natural feelings of pure magic and excitement!",
+    "Penguins propose to their lifelong soulmates with a pebble, and seahorses swim holding tails!",
+    "A hug lasting 4+ seconds triggers oxytocin release, boosting trust and instantly reducing stress.",
+    "Couples who laugh together regularly report 80% higher relationship satisfaction and happiness.",
+    "Chocolate contains phenylethylamine — the same chemical your brain releases when you fall in love!",
+    "Holding hands with someone you love can instantly relieve physical pain and lessen anxiety.",
+    "Butterflies in your stomach are real! It is caused by an adrenaline rush when seeing your special person.",
+    "It takes only 1/5th of a second for love-related neurochemicals to start firing in your brain!"
+];
+
+let lastFactIndex = 0;
+
+function generateNewLoveFact() {
+    let nextIndex;
+    do {
+        nextIndex = Math.floor(Math.random() * loveFacts.length);
+    } while (nextIndex === lastFactIndex && loveFacts.length > 1);
+    
+    lastFactIndex = nextIndex;
+    const factElement = document.getElementById('featuredFactText');
+    if (factElement) {
+        factElement.style.opacity = '0';
+        setTimeout(() => {
+            factElement.textContent = loveFacts[nextIndex];
+            factElement.style.opacity = '1';
+        }, 200);
+    }
+}
+
+// ============= GAME FLOW =============
 // Start Love Test
 function startLoveTest() {
     const name1 = document.getElementById('name1').value.trim();
@@ -45,7 +142,8 @@ let memoryGame = {
 const heartEmojis = ['💖', '💗', '💝', '💘', '💕', '💞'];
 
 function initMemoryGame() {
-    // Reset game state
+    if (memoryGame.timerInterval) clearInterval(memoryGame.timerInterval);
+    
     memoryGame = {
         cards: [],
         flippedCards: [],
@@ -211,8 +309,9 @@ function initWordScramble() {
         letterButtons.appendChild(btn);
     });
     
-    // Clear guessed word display
+    // Clear guessed word display & results
     document.getElementById('guessedWord').textContent = '';
+    document.getElementById('game2Result').innerHTML = '';
 }
 
 function selectLetter() {
@@ -296,6 +395,9 @@ let arrowGame = {
 };
 
 function initArrowGame() {
+    if (arrowGame.arrowInterval) clearInterval(arrowGame.arrowInterval);
+    if (arrowGame.powerInterval) clearInterval(arrowGame.powerInterval);
+
     arrowGame = {
         score: 0,
         hasShot: false,
@@ -415,8 +517,10 @@ function showFinalResult() {
 function animatePercentage(percentage) {
     const circle = document.getElementById('progressCircle');
     const percentText = document.getElementById('percentageText');
-    const circumference = 2 * Math.PI * 90;
-    const offset = circumference - (percentage / 100) * circumference;
+    
+    // Calculate circumference based on screen size (default r=90 -> 565.48, mobile r=75 -> 471.24)
+    const isMobile = window.innerWidth <= 600;
+    const circumference = isMobile ? (2 * Math.PI * 75) : (2 * Math.PI * 90);
     
     // Animate from 0 to final percentage
     let currentPercent = 0;
@@ -432,7 +536,7 @@ function animatePercentage(percentage) {
         
         percentText.textContent = Math.round(currentPercent) + '%';
         const currentOffset = circumference - (currentPercent / 100) * circumference;
-        circle.style.strokeDashoffset = currentOffset;
+        if (circle) circle.style.strokeDashoffset = currentOffset;
     }, 40);
 }
 
@@ -463,14 +567,27 @@ function showCompatibilityMessage(percentage) {
         message = `${gameState.name1} and ${gameState.name2}, the best relationships start with friendship! Take your time, enjoy the journey, and let love develop naturally. Great things take time! 🌻💝`;
     }
     
-    levelElement.textContent = level;
-    messageElement.textContent = message;
+    if (levelElement) levelElement.textContent = level;
+    if (messageElement) messageElement.textContent = message;
 }
 
 // ============= UTILITY FUNCTIONS =============
 function switchScreen(currentScreen, nextScreen) {
-    document.getElementById(currentScreen).classList.remove('active');
-    document.getElementById(nextScreen).classList.add('active');
+    const current = document.getElementById(currentScreen);
+    const next = document.getElementById(nextScreen);
+    
+    if (current) current.classList.remove('active');
+    if (next) next.classList.add('active');
+
+    // Update nav active link state
+    document.querySelectorAll('.nav-links .nav-item').forEach(navItem => {
+        navItem.classList.remove('active');
+    });
+
+    if (nextScreen === 'welcomeScreen') {
+        const homeNavItem = document.querySelector('.nav-links .nav-item[data-screen="home"]');
+        if (homeNavItem) homeNavItem.classList.add('active');
+    }
 }
 
 function resetCalculator() {
@@ -486,30 +603,45 @@ function resetCalculator() {
     };
     
     // Clear inputs
-    document.getElementById('name1').value = '';
-    document.getElementById('name2').value = '';
+    const name1Input = document.getElementById('name1');
+    const name2Input = document.getElementById('name2');
+    if (name1Input) name1Input.value = '';
+    if (name2Input) name2Input.value = '';
     
     // Reset progress circle
-    document.getElementById('progressCircle').style.strokeDashoffset = 565.48;
+    const circle = document.getElementById('progressCircle');
+    if (circle) circle.style.strokeDashoffset = '565.48';
     
     // Go back to welcome screen
     switchScreen('resultScreen', 'welcomeScreen');
 }
 
-// Keyboard support
+// Keyboard support & document setup
 document.addEventListener('DOMContentLoaded', function() {
     const name1Input = document.getElementById('name1');
     const name2Input = document.getElementById('name2');
     
-    name1Input.addEventListener('keypress', function(e) {
-        if(e.key === 'Enter') {
-            name2Input.focus();
-        }
-    });
+    if (name1Input) {
+        name1Input.addEventListener('keypress', function(e) {
+            if(e.key === 'Enter' && name2Input) {
+                name2Input.focus();
+            }
+        });
+    }
     
-    name2Input.addEventListener('keypress', function(e) {
-        if(e.key === 'Enter') {
-            startLoveTest();
+    if (name2Input) {
+        name2Input.addEventListener('keypress', function(e) {
+            if(e.key === 'Enter') {
+                startLoveTest();
+            }
+        });
+    }
+
+    // Close mobile menu when clicking outside navbar
+    document.addEventListener('click', function(event) {
+        const navbar = document.querySelector('.navbar');
+        if (navbar && !navbar.contains(event.target)) {
+            closeMobileMenu();
         }
     });
 });

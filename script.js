@@ -1,3 +1,66 @@
+// ============= FIREBASE FIRESTORE INTEGRATION =============
+// Firebase is loaded dynamically via ES module imports on-demand so that existing inline 
+// onclick handlers and non-module script architecture continue working seamlessly.
+const firebaseConfig = {
+    apiKey: "AIzaSyA_RZ6KkA7DbRgvgZ6MucVKm4QYldSpNCA",
+    authDomain: "love-n-toxic-analytics.firebaseapp.com",
+    projectId: "love-n-toxic-analytics",
+    storageBucket: "love-n-toxic-analytics.firebasestorage.app",
+    messagingSenderId: "44732402596",
+    appId: "1:44732402596:web:5b14c469c2233207e94f31"
+};
+
+let firebaseDb = null;
+let hasSavedCurrentResult = false;
+
+async function getFirebaseDb() {
+    if (firebaseDb) return firebaseDb;
+    try {
+        const { initializeApp } = await import(
+            "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js"
+        );
+        const { getFirestore } = await import(
+            "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
+        );
+        const app = initializeApp(firebaseConfig);
+        firebaseDb = getFirestore(app);
+        console.log("Firebase initialized successfully.");
+        return firebaseDb;
+    } catch (error) {
+        console.error("Firebase initialization failed:", error);
+        return null;
+    }
+}
+
+async function saveLoveCalculatorResult() {
+    if (hasSavedCurrentResult) return;
+    hasSavedCurrentResult = true;
+
+    try {
+        const db = await getFirebaseDb();
+        if (!db) {
+            console.warn("Firestore instance not available.");
+            return;
+        }
+        const { collection, addDoc, serverTimestamp } = await import(
+            "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
+        );
+        await addDoc(collection(db, "loveCalculatorAttempts"), {
+            name1: gameState.name1,
+            name2: gameState.name2,
+            game1Score: gameState.scores.game1,
+            game2Score: gameState.scores.game2,
+            game3Score: gameState.scores.game3,
+            finalPercentage: gameState.finalPercentage,
+            createdAt: serverTimestamp()
+        });
+        console.log("Love Calculator result saved to Firestore successfully.");
+    } catch (error) {
+        // Firebase failure must NEVER break the Love Calculator experience.
+        console.error("Error saving result to Firestore:", error);
+    }
+}
+
 // Game State
 let gameState = {
     name1: '',
@@ -62,8 +125,8 @@ function toggleMobileMenu() {
     const hamburger = document.getElementById('hamburgerBtn');
     const navLinks = document.getElementById('navLinks');
     
-    hamburger.classList.toggle('active');
-    navLinks.classList.toggle('active');
+    if (hamburger) hamburger.classList.toggle('active');
+    if (navLinks) navLinks.classList.toggle('active');
 }
 
 function closeMobileMenu() {
@@ -109,14 +172,18 @@ function generateNewLoveFact() {
 // ============= GAME FLOW =============
 // Start Love Test
 function startLoveTest() {
-    const name1 = document.getElementById('name1').value.trim();
-    const name2 = document.getElementById('name2').value.trim();
+    const name1Input = document.getElementById('name1');
+    const name2Input = document.getElementById('name2');
+    
+    const name1 = name1Input ? name1Input.value.trim() : '';
+    const name2 = name2Input ? name2Input.value.trim() : '';
     
     if(name1 === '' || name2 === '') {
         alert('Please enter both names! 💕');
         return;
     }
     
+    hasSavedCurrentResult = false; // Reset duplicate save guard for new attempt
     gameState.name1 = name1;
     gameState.name2 = name2;
     
@@ -159,29 +226,35 @@ function initMemoryGame() {
     
     // Generate grid
     const grid = document.getElementById('memoryGrid');
-    grid.innerHTML = '';
-    
-    memoryGame.cards.forEach((emoji, index) => {
-        const card = document.createElement('div');
-        card.className = 'memory-card';
-        card.dataset.index = index;
-        card.innerHTML = `
-            <div class="card-back">💟</div>
-            <div class="card-front">${emoji}</div>
-        `;
-        card.addEventListener('click', flipCard);
-        grid.appendChild(card);
-    });
+    if (grid) {
+        grid.innerHTML = '';
+        memoryGame.cards.forEach((emoji, index) => {
+            const card = document.createElement('div');
+            card.className = 'memory-card';
+            card.dataset.index = index;
+            card.innerHTML = `
+                <div class="card-back">💟</div>
+                <div class="card-front">${emoji}</div>
+            `;
+            card.addEventListener('click', flipCard);
+            grid.appendChild(card);
+        });
+    }
     
     // Update display
-    document.getElementById('moves').textContent = '0';
-    document.getElementById('matches').textContent = '0/6';
-    document.getElementById('memoryTimer').textContent = '0';
+    const movesEl = document.getElementById('moves');
+    const matchesEl = document.getElementById('matches');
+    const timerEl = document.getElementById('memoryTimer');
+    
+    if (movesEl) movesEl.textContent = '0';
+    if (matchesEl) matchesEl.textContent = '0/6';
+    if (timerEl) timerEl.textContent = '0';
     
     // Start timer
     memoryGame.timerInterval = setInterval(() => {
         memoryGame.timer++;
-        document.getElementById('memoryTimer').textContent = memoryGame.timer;
+        const currentTimerEl = document.getElementById('memoryTimer');
+        if (currentTimerEl) currentTimerEl.textContent = memoryGame.timer;
     }, 1000);
 }
 
@@ -194,7 +267,8 @@ function flipCard() {
     
     if(memoryGame.flippedCards.length === 2) {
         memoryGame.moves++;
-        document.getElementById('moves').textContent = memoryGame.moves;
+        const movesEl = document.getElementById('moves');
+        if (movesEl) movesEl.textContent = memoryGame.moves;
         checkMatch();
     }
 }
@@ -210,7 +284,8 @@ function checkMatch() {
             card1.classList.add('matched');
             card2.classList.add('matched');
             memoryGame.matchedPairs++;
-            document.getElementById('matches').textContent = `${memoryGame.matchedPairs}/6`;
+            const matchesEl = document.getElementById('matches');
+            if (matchesEl) matchesEl.textContent = `${memoryGame.matchedPairs}/6`;
             memoryGame.flippedCards = [];
             
             if(memoryGame.matchedPairs === 6) {
@@ -256,7 +331,7 @@ function endMemoryGame() {
     }
     
     const resultDiv = document.getElementById('game1Result');
-    resultDiv.innerHTML = message;
+    if (resultDiv) resultDiv.innerHTML = message;
     
     setTimeout(() => {
         switchScreen('game1Screen', 'game2Screen');
@@ -293,25 +368,30 @@ function initWordScramble() {
     const scrambled = wordGame.currentWord.split('').sort(() => Math.random() - 0.5).join('');
     
     // Display scrambled word
-    document.getElementById('scrambledWord').textContent = scrambled;
-    document.getElementById('wordHint').textContent = randomWord.hint;
+    const scrambledWordEl = document.getElementById('scrambledWord');
+    const wordHintEl = document.getElementById('wordHint');
+    if (scrambledWordEl) scrambledWordEl.textContent = scrambled;
+    if (wordHintEl) wordHintEl.textContent = randomWord.hint;
     
     // Create letter buttons
     const letterButtons = document.getElementById('letterButtons');
-    letterButtons.innerHTML = '';
-    
-    scrambled.split('').forEach((letter, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'letter-btn';
-        btn.textContent = letter;
-        btn.dataset.index = index;
-        btn.addEventListener('click', selectLetter);
-        letterButtons.appendChild(btn);
-    });
+    if (letterButtons) {
+        letterButtons.innerHTML = '';
+        scrambled.split('').forEach((letter, index) => {
+            const btn = document.createElement('button');
+            btn.className = 'letter-btn';
+            btn.textContent = letter;
+            btn.dataset.index = index;
+            btn.addEventListener('click', selectLetter);
+            letterButtons.appendChild(btn);
+        });
+    }
     
     // Clear guessed word display & results
-    document.getElementById('guessedWord').textContent = '';
-    document.getElementById('game2Result').innerHTML = '';
+    const guessedWordEl = document.getElementById('guessedWord');
+    const resultDiv = document.getElementById('game2Result');
+    if (guessedWordEl) guessedWordEl.textContent = '';
+    if (resultDiv) resultDiv.innerHTML = '';
 }
 
 function selectLetter() {
@@ -322,16 +402,19 @@ function selectLetter() {
     wordGame.userGuess.push({ letter, button: this });
     
     // Update display
-    document.getElementById('guessedWord').textContent = 
-        wordGame.userGuess.map(item => item.letter).join(' ');
+    const guessedWordEl = document.getElementById('guessedWord');
+    if (guessedWordEl) {
+        guessedWordEl.textContent = wordGame.userGuess.map(item => item.letter).join(' ');
+    }
 }
 
 function clearGuess() {
     wordGame.userGuess.forEach(item => {
-        item.button.classList.remove('used');
+        if (item.button) item.button.classList.remove('used');
     });
     wordGame.userGuess = [];
-    document.getElementById('guessedWord').textContent = '';
+    const guessedWordEl = document.getElementById('guessedWord');
+    if (guessedWordEl) guessedWordEl.textContent = '';
 }
 
 function submitWord() {
@@ -369,7 +452,8 @@ function submitWord() {
             message = `💝 Nice Work! ${timeTaken}s and ${wordGame.attempts} attempts. Love conquers all! +${score} pts`;
         }
         
-        document.getElementById('game2Result').innerHTML = message;
+        const resultDiv = document.getElementById('game2Result');
+        if (resultDiv) resultDiv.innerHTML = message;
         
         setTimeout(() => {
             switchScreen('game2Screen', 'game3Screen');
@@ -377,7 +461,9 @@ function submitWord() {
         }, 3000);
     } else {
         // Wrong
-        alert(`Not quite! Try again. (Hint: ${document.getElementById('wordHint').textContent})`);
+        const hintEl = document.getElementById('wordHint');
+        const hintText = hintEl ? hintEl.textContent : '';
+        alert(`Not quite! Try again. (Hint: ${hintText})`);
         clearGuess();
     }
 }
@@ -409,9 +495,13 @@ function initArrowGame() {
         powerDirection: 1
     };
     
-    document.getElementById('arrowScore').textContent = '0';
-    document.getElementById('shootButton').textContent = '🏹 Shoot Arrow!';
-    document.getElementById('game3Result').innerHTML = '';
+    const arrowScoreEl = document.getElementById('arrowScore');
+    const shootButtonEl = document.getElementById('shootButton');
+    const game3ResultEl = document.getElementById('game3Result');
+    
+    if (arrowScoreEl) arrowScoreEl.textContent = '0';
+    if (shootButtonEl) shootButtonEl.textContent = '🏹 Shoot Arrow!';
+    if (game3ResultEl) game3ResultEl.innerHTML = '';
     
     const arrow = document.getElementById('movingArrow');
     const powerBar = document.getElementById('powerBar');
@@ -426,7 +516,7 @@ function initArrowGame() {
             arrowGame.arrowDirection = 1;
         }
         
-        arrow.style.left = arrowGame.arrowPosition + '%';
+        if (arrow) arrow.style.left = arrowGame.arrowPosition + '%';
     }, 20);
     
     // Start power bar animation manually
@@ -439,7 +529,7 @@ function initArrowGame() {
             arrowGame.powerDirection = 1;
         }
         
-        powerBar.style.width = arrowGame.powerLevel + '%';
+        if (powerBar) powerBar.style.width = arrowGame.powerLevel + '%';
     }, 30);
 }
 
@@ -470,7 +560,8 @@ function shootArrow() {
     gameState.scores.game3 = totalScore;
     
     // Update display
-    document.getElementById('arrowScore').textContent = totalScore;
+    const arrowScoreEl = document.getElementById('arrowScore');
+    if (arrowScoreEl) arrowScoreEl.textContent = totalScore;
     
     let message = '';
     if(totalScore >= 30) {
@@ -483,8 +574,10 @@ function shootArrow() {
         message = `💕 Nice Try! Love doesn't need perfection! +${totalScore} pts`;
     }
     
-    document.getElementById('game3Result').innerHTML = message;
-    document.getElementById('shootButton').textContent = 'See Results! 💖';
+    const resultDiv = document.getElementById('game3Result');
+    const shootButtonEl = document.getElementById('shootButton');
+    if (resultDiv) resultDiv.innerHTML = message;
+    if (shootButtonEl) shootButtonEl.textContent = 'See Results! 💖';
 }
 
 // ============= FINAL RESULT =============
@@ -498,14 +591,22 @@ function showFinalResult() {
     const percentage = Math.min(100, Math.round((totalScore / 105) * 100));
     gameState.finalPercentage = percentage;
     
+    // Save to Firebase Firestore (non-blocking, failsafed)
+    saveLoveCalculatorResult().catch(err => console.error("Firebase save error:", err));
+    
     // Display names
-    document.getElementById('finalName1').textContent = gameState.name1;
-    document.getElementById('finalName2').textContent = gameState.name2;
+    const finalName1El = document.getElementById('finalName1');
+    const finalName2El = document.getElementById('finalName2');
+    if (finalName1El) finalName1El.textContent = gameState.name1;
+    if (finalName2El) finalName2El.textContent = gameState.name2;
     
     // Display scores
-    document.getElementById('score1').textContent = gameState.scores.game1;
-    document.getElementById('score2').textContent = gameState.scores.game2;
-    document.getElementById('score3').textContent = gameState.scores.game3;
+    const score1El = document.getElementById('score1');
+    const score2El = document.getElementById('score2');
+    const score3El = document.getElementById('score3');
+    if (score1El) score1El.textContent = gameState.scores.game1;
+    if (score2El) score2El.textContent = gameState.scores.game2;
+    if (score3El) score3El.textContent = gameState.scores.game3;
     
     // Animate percentage
     animatePercentage(percentage);
@@ -534,7 +635,7 @@ function animatePercentage(percentage) {
             clearInterval(interval);
         }
         
-        percentText.textContent = Math.round(currentPercent) + '%';
+        if (percentText) percentText.textContent = Math.round(currentPercent) + '%';
         const currentOffset = circumference - (currentPercent / 100) * circumference;
         if (circle) circle.style.strokeDashoffset = currentOffset;
     }, 40);
@@ -591,6 +692,7 @@ function switchScreen(currentScreen, nextScreen) {
 }
 
 function resetCalculator() {
+    hasSavedCurrentResult = false; // Reset duplicate save guard for new attempt
     gameState = {
         name1: '',
         name2: '',
@@ -615,6 +717,20 @@ function resetCalculator() {
     // Go back to welcome screen
     switchScreen('resultScreen', 'welcomeScreen');
 }
+
+// Global scope attachment for inline HTML onclick handlers
+window.startLoveTest = startLoveTest;
+window.startGame1 = startGame1;
+window.clearGuess = clearGuess;
+window.submitWord = submitWord;
+window.shootArrow = shootArrow;
+window.showFinalResult = showFinalResult;
+window.resetCalculator = resetCalculator;
+window.navigateTo = navigateTo;
+window.toggleMobileMenu = toggleMobileMenu;
+window.closeMobileMenu = closeMobileMenu;
+window.generateNewLoveFact = generateNewLoveFact;
+window.saveLoveCalculatorResult = saveLoveCalculatorResult;
 
 // Keyboard support & document setup
 document.addEventListener('DOMContentLoaded', function() {

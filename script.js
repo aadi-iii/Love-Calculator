@@ -753,6 +753,38 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Smooth scroll focused name inputs into visible mobile viewport above virtual keyboard
+    function setupMobileInputScroll(inputElement) {
+        if (!inputElement) return;
+
+        inputElement.addEventListener('focus', function() {
+            setTimeout(function() {
+                inputElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                    inline: 'nearest'
+                });
+            }, 300);
+        });
+    }
+
+    setupMobileInputScroll(name1Input);
+    setupMobileInputScroll(name2Input);
+
+    // Adjust scrolling on mobile visualViewport resize when virtual keyboard opens/closes
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function() {
+            const activeEl = document.activeElement;
+            if (activeEl && (activeEl.id === 'name1' || activeEl.id === 'name2')) {
+                activeEl.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                    inline: 'nearest'
+                });
+            }
+        });
+    }
+
     // Close mobile menu when clicking outside navbar
     document.addEventListener('click', function(event) {
         const navbar = document.querySelector('.navbar');

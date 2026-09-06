@@ -50,5 +50,6 @@ Unlike simple random percentage generators, this calculator evaluates true compa
 
 Created with 💕 by **Aadiii**.
 
+
 - **Instagram**: [@whyy.aadiii](https://www.instagram.com/whyy.aadiii?igsh=MWZyOTNiaGw2a3NydQ%3D%3D)
 - **Sister Project**: [Toxic Match ☠️](https://aadi-iii.github.io/toxic-match/)

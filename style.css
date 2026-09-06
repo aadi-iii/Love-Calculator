@@ -986,6 +986,190 @@ body {
     font-weight: 700;
 }
 
+/* ==========================================================================
+   GAME 4: WHO FALLS FIRST? STYLES
+   ========================================================================== */
+.who-falls-container {
+    background: rgba(26, 10, 46, 0.4);
+    border: 1px solid rgba(255, 105, 180, 0.3);
+    border-radius: 18px;
+    padding: 18px 20px;
+    margin-bottom: 25px;
+    text-align: center;
+}
+
+.names-meter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 12px;
+}
+
+.meter-name {
+    color: #ff69b4;
+    max-width: 40%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.meter-vs {
+    font-size: 0.85rem;
+    color: rgba(255, 192, 203, 0.6);
+    font-weight: 700;
+}
+
+.love-balance-meter-bar {
+    width: 100%;
+    height: 18px;
+    background: rgba(255, 105, 180, 0.15);
+    border: 1.5px solid rgba(255, 105, 180, 0.4);
+    border-radius: 20px;
+    position: relative;
+    overflow: visible;
+    margin-bottom: 10px;
+}
+
+.love-balance-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff1493, #ff69b4, #ff1493);
+    border-radius: 20px;
+    transition: width 0.4s ease-out;
+}
+
+.love-meter-heart-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.2rem;
+    pointer-events: none;
+    filter: drop-shadow(0 0 5px #ff1493);
+}
+
+.meter-status-text {
+    font-size: 0.9rem;
+    color: rgba(255, 192, 203, 0.85);
+    font-weight: 500;
+}
+
+.situation-card {
+    background: rgba(26, 10, 46, 0.3);
+    border: 1px solid rgba(255, 105, 180, 0.25);
+    border-radius: 18px;
+    padding: 22px 18px;
+    text-align: center;
+    animation: fadeIn 0.4s ease-out;
+}
+
+.situation-counter {
+    display: inline-block;
+    background: rgba(255, 105, 180, 0.2);
+    color: #ff69b4;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 14px;
+    border: 1px solid rgba(255, 105, 180, 0.3);
+}
+
+.situation-question {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #ffffff;
+    line-height: 1.5;
+    margin-bottom: 22px;
+}
+
+.situation-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.situation-option-btn {
+    width: 100%;
+    padding: 14px 18px;
+    font-size: 1rem;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-radius: 12px;
+    transition: all 0.25s ease;
+    cursor: pointer;
+}
+
+.situation-option-btn:hover {
+    transform: translateX(4px);
+    background: rgba(255, 105, 180, 0.25);
+    border-color: rgba(255, 105, 180, 0.8);
+    box-shadow: 0 4px 15px rgba(255, 105, 180, 0.3);
+}
+
+.game4-result-card {
+    background: rgba(26, 10, 46, 0.4);
+    border: 1px solid rgba(255, 105, 180, 0.35);
+    border-radius: 20px;
+    padding: 25px 20px;
+    text-align: center;
+    animation: slideUp 0.5s ease-out;
+}
+
+.who-falls-winner {
+    font-size: 1.6rem;
+    color: #ff69b4;
+    margin-bottom: 8px;
+}
+
+.who-falls-subtitle {
+    font-size: 1rem;
+    color: rgba(255, 192, 203, 0.9);
+    margin-bottom: 22px;
+}
+
+.falling-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 25px;
+}
+
+.falling-bar-item {
+    background: rgba(255, 105, 180, 0.08);
+    border: 1px solid rgba(255, 105, 180, 0.2);
+    border-radius: 12px;
+    padding: 12px 16px;
+}
+
+.falling-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #ffffff;
+    margin-bottom: 8px;
+}
+
+.falling-progress {
+    width: 100%;
+    height: 12px;
+    background: rgba(26, 10, 46, 0.5);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.falling-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ff69b4, #ff1493);
+    border-radius: 10px;
+    transition: width 0.6s ease-out;
+}
+
 /* Game Result Display */
 .game-result {
     margin-top: 20px;
@@ -1364,6 +1548,23 @@ body {
     .instagram-icon {
         width: 24px;
         height: 24px;
+    }
+
+    .names-meter-header {
+        font-size: 1rem;
+    }
+
+    .situation-question {
+        font-size: 1.05rem;
+    }
+
+    .situation-option-btn {
+        padding: 12px 14px;
+        font-size: 0.95rem;
+    }
+
+    .who-falls-winner {
+        font-size: 1.35rem;
     }
 }
 

@@ -861,9 +861,12 @@ function renderCurrentSituation() {
 
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'btn-option';
-            btn.textContent = optText;
-            btn.onclick = () => selectSituationOption(opt.name1Pts, opt.name2Pts);
+            btn.className = 'btn-option situation-option-btn';
+            btn.innerHTML = `<span class="option-text">${optText}</span><span class="option-arrow">›</span>`;
+            btn.onclick = function() {
+                btn.classList.add('selected');
+                selectSituationOption(opt.name1Pts, opt.name2Pts);
+            };
             optionsContainer.appendChild(btn);
         });
     }

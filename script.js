@@ -51,6 +51,7 @@ async function saveLoveCalculatorResult() {
             game1Score: gameState.scores.game1,
             game2Score: gameState.scores.game2,
             game3Score: gameState.scores.game3,
+            game4Score: gameState.scores.game4,
             finalPercentage: gameState.finalPercentage,
             createdAt: serverTimestamp()
         });
@@ -68,7 +69,8 @@ let gameState = {
     scores: {
         game1: 0,
         game2: 0,
-        game3: 0
+        game3: 0,
+        game4: 0
     },
     finalPercentage: 0
 };
@@ -88,7 +90,7 @@ function navigateTo(screenKey) {
     const currentActiveScreen = document.querySelector('.screen.active');
     if (currentActiveScreen) {
         const activeId = currentActiveScreen.id;
-        if (['game1Screen', 'game2Screen', 'game3Screen'].includes(activeId)) {
+        if (['game1Screen', 'game2Screen', 'game3Screen', 'game4Screen'].includes(activeId)) {
             const confirmLeave = confirm('Are you sure you want to leave the active game? Your progress will be reset. 💕');
             if (!confirmLeave) return;
         }
@@ -208,6 +210,49 @@ let memoryGame = {
 
 const heartEmojis = ['💖', '💗', '💝', '💘', '💕', '💞'];
 
+// Smart Fisher-Yates Randomization ensuring matching cards are distributed non-adjacently
+function generateSmartRandomMemoryCards() {
+    const pairs = [...heartEmojis, ...heartEmojis];
+    let bestCards = null;
+    let minAdjacencies = Infinity;
+
+    // Retry shuffle up to 100 times to get zero adjacent matching pairs in 4x3 grid
+    for (let attempt = 0; attempt < 100; attempt++) {
+        const shuffled = [...pairs];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        let adjCount = 0;
+
+        // Check 4 columns x 3 rows grid adjacencies (12 cards total)
+        for (let i = 0; i < 12; i++) {
+            const row = Math.floor(i / 4);
+            const col = i % 4;
+
+            // Horizontal neighbor (right)
+            if (col < 3 && shuffled[i] === shuffled[i + 1]) {
+                adjCount++;
+            }
+            // Vertical neighbor (below)
+            if (row < 2 && shuffled[i] === shuffled[i + 4]) {
+                adjCount++;
+            }
+        }
+
+        if (adjCount < minAdjacencies) {
+            minAdjacencies = adjCount;
+            bestCards = shuffled;
+        }
+
+        // Perfect configuration found (zero adjacencies)!
+        if (adjCount === 0) break;
+    }
+
+    return bestCards;
+}
+
 function initMemoryGame() {
     if (memoryGame.timerInterval) clearInterval(memoryGame.timerInterval);
     
@@ -220,9 +265,8 @@ function initMemoryGame() {
         timerInterval: null
     };
     
-    // Create card pairs
-    const cardPairs = [...heartEmojis, ...heartEmojis];
-    memoryGame.cards = cardPairs.sort(() => Math.random() - 0.5);
+    // Generate fresh smart randomized card arrangement for every new game/restart
+    memoryGame.cards = generateSmartRandomMemoryCards();
     
     // Generate grid
     const grid = document.getElementById('memoryGrid');
@@ -342,13 +386,31 @@ function endMemoryGame() {
 // ============= GAME 2: WORD SCRAMBLE =============
 let wordGame = {
     words: [
-        { word: 'ROMANCE', hint: 'Love affair', scrambled: '' },
-        { word: 'PASSION', hint: 'Intense emotion', scrambled: '' },
-        { word: 'FOREVER', hint: 'Eternal love', scrambled: '' },
-        { word: 'SOULMATE', hint: 'Perfect match', scrambled: '' },
-        { word: 'BELOVED', hint: 'Dearly loved', scrambled: '' },
-        { word: 'CUPID', hint: 'Love god', scrambled: '' },
-        { word: 'SWEETHEART', hint: 'Term of endearment', scrambled: '' }
+        // Original words (KEPT 100%)
+        { word: 'ROMANCE', hint: 'Love affair' },
+        { word: 'PASSION', hint: 'Intense emotion' },
+        { word: 'FOREVER', hint: 'Eternal love' },
+        { word: 'SOULMATE', hint: 'Perfect match' },
+        { word: 'BELOVED', hint: 'Dearly loved' },
+        { word: 'CUPID', hint: 'Love god' },
+        { word: 'SWEETHEART', hint: 'Term of endearment' },
+
+        // Expanded romantic word additions
+        { word: 'AFFECTION', hint: 'Fondness & warmth' },
+        { word: 'ADORABLE', hint: 'Charming & cute' },
+        { word: 'DEVOTION', hint: 'Deep loyalty & love' },
+        { word: 'HEARTBEAT', hint: 'Rhythm of your heart' },
+        { word: 'TOGETHER', hint: 'Side by side forever' },
+        { word: 'DARLING', hint: 'Precious loved one' },
+        { word: 'CUDDLE', hint: 'Warm affectionate hug' },
+        { word: 'KISSES', hint: 'Sweet romantic lips' },
+        { word: 'CHEMISTRY', hint: 'Natural spark & attraction' },
+        { word: 'CRUSH', hint: 'Secret romantic feeling' },
+        { word: 'LOVER', hint: 'Partner in romance' },
+        { word: 'HUGS', hint: 'Comforting warm embrace' },
+        { word: 'BLUSH', hint: 'Shy rosy smile' },
+        { word: 'DATE', hint: 'Romantic outing together' },
+        { word: 'MEMORIES', hint: 'Cherished moments shared' }
     ],
     currentWord: null,
     userGuess: [],
@@ -357,15 +419,20 @@ let wordGame = {
 };
 
 function initWordScramble() {
-    // Pick random word
+    // Pick random word from expanded pool
     const randomWord = wordGame.words[Math.floor(Math.random() * wordGame.words.length)];
     wordGame.currentWord = randomWord.word;
     wordGame.userGuess = [];
     wordGame.attempts = 0;
     wordGame.startTime = Date.now();
     
-    // Scramble the word
-    const scrambled = wordGame.currentWord.split('').sort(() => Math.random() - 0.5).join('');
+    // Scramble the word, ensuring scrambled string is not identical to original word
+    let scrambled = wordGame.currentWord;
+    let scrambleAttempts = 0;
+    while (scrambleAttempts < 20 && (scrambled === wordGame.currentWord || scrambled.length !== wordGame.currentWord.length)) {
+        scrambled = wordGame.currentWord.split('').sort(() => Math.random() - 0.5).join('');
+        scrambleAttempts++;
+    }
     
     // Display scrambled word
     const scrambledWordEl = document.getElementById('scrambledWord');
@@ -535,9 +602,9 @@ function initArrowGame() {
 
 function shootArrow() {
     if(arrowGame.hasShot) {
-        // Move to next screen
-        switchScreen('game3Screen', 'resultScreen');
-        showFinalResult();
+        // Transition to Game 4: Who Falls First?
+        switchScreen('game3Screen', 'game4Screen');
+        initWhoFallsFirstGame();
         return;
     }
     
@@ -547,48 +614,339 @@ function shootArrow() {
     clearInterval(arrowGame.arrowInterval);
     clearInterval(arrowGame.powerInterval);
     
-    // Calculate score based on arrow position (center is best)
-    const centerDistance = Math.abs(arrowGame.arrowPosition - 42.5); // Center is around 42.5%
-    let posScore = Math.max(0, 50 - centerDistance);
-    
-    // Calculate power score (50% is perfect)
-    const powerDistance = Math.abs(arrowGame.powerLevel - 50);
-    let powerScore = Math.max(0, 50 - powerDistance);
-    
-    const totalScore = Math.min(35, Math.round((posScore + powerScore) / 3));
+    // Real DOM Geometry Hit Detection using actual rendered element positions
+    const targetHeart = document.querySelector('#game3Screen .target-heart');
+    const movingArrow = document.getElementById('movingArrow');
+
+    let isHit = false;
+    let posAccuracy = 0; // 0 to 1
+
+    if (targetHeart && movingArrow) {
+        const heartRect = targetHeart.getBoundingClientRect();
+        const arrowRect = movingArrow.getBoundingClientRect();
+
+        // Calculate actual horizontal center of target heart and arrow impact tip
+        const heartCenterX = heartRect.left + heartRect.width / 2;
+        const arrowTipX = arrowRect.left + arrowRect.width / 2;
+
+        const heartHalfWidth = heartRect.width / 2;
+        const distX = Math.abs(arrowTipX - heartCenterX);
+
+        // Evaluate if arrow tip hits within rendered heart target bounds
+        if (distX <= heartHalfWidth) {
+            isHit = true;
+            // 1.0 accuracy at exact center, scaling down to 0.0 at outer edge of target
+            posAccuracy = 1 - (distX / heartHalfWidth);
+        } else {
+            isHit = false;
+            posAccuracy = 0;
+        }
+    } else {
+        // Safe fallback if DOM elements are detached
+        const centerDistance = Math.abs(arrowGame.arrowPosition - 42.5);
+        posAccuracy = Math.max(0, 1 - (centerDistance / 25));
+        isHit = posAccuracy > 0;
+    }
+
+    // Power Accuracy (50% power level is ideal)
+    const powerDist = Math.abs(arrowGame.powerLevel - 50);
+    const powerAccuracy = Math.max(0, 1 - (powerDist / 50)); // 1.0 for 50%, 0.0 for 0% or 100%
+
+    // Calculate score out of 35 max points deterministically
+    let totalScore = 0;
+
+    if (!isHit) {
+        // Complete Miss (0 points)
+        totalScore = 0;
+    } else {
+        // Hit: Position accuracy contributes up to 25 pts, power contributes up to 10 pts
+        const posPoints = posAccuracy * 25;
+        const powerPoints = powerAccuracy * 10;
+        totalScore = Math.min(35, Math.max(5, Math.round(posPoints + powerPoints)));
+    }
+
     arrowGame.score = totalScore;
     gameState.scores.game3 = totalScore;
     
-    // Update display
+    // Update score display
     const arrowScoreEl = document.getElementById('arrowScore');
     if (arrowScoreEl) arrowScoreEl.textContent = totalScore;
     
+    // Dynamic Feedback Messages based strictly on real shot accuracy
     let message = '';
-    if(totalScore >= 30) {
-        message = `🎯 Bullseye! Perfect shot! Your hearts beat as one! +${totalScore} pts`;
-    } else if(totalScore >= 25) {
-        message = `💘 Great Aim! Close to the heart! Strong bond! +${totalScore} pts`;
-    } else if(totalScore >= 20) {
-        message = `💖 Good Shot! Nice timing! +${totalScore} pts`;
+    if (!isHit) {
+        message = `💀 Cupid missed completely! +0 pts`;
+    } else if (totalScore >= 32) {
+        message = `🎯 Bullseye! Cupid approves. ❤️ +${totalScore} pts`;
+    } else if (totalScore >= 24) {
+        message = `So close! Cupid almost got it. 💘 +${totalScore} pts`;
     } else {
-        message = `💕 Nice Try! Love doesn't need perfection! +${totalScore} pts`;
+        message = `💔 Barely clipped the heart! +${totalScore} pts`;
     }
     
     const resultDiv = document.getElementById('game3Result');
     const shootButtonEl = document.getElementById('shootButton');
     if (resultDiv) resultDiv.innerHTML = message;
-    if (shootButtonEl) shootButtonEl.textContent = 'See Results! 💖';
+    if (shootButtonEl) shootButtonEl.textContent = 'Next Game: Who Falls First? 💘';
+}
+
+// ============= GAME 4: WHO FALLS FIRST? =============
+let whoFallsState = {
+    currentSituationIndex: 0,
+    name1FallScore: 0,
+    name2FallScore: 0,
+    totalSituations: 10
+};
+
+const whoFallsSituations = [
+    {
+        question: "Who texts first in the morning?",
+        options: [
+            { text: "{name1} always sends the first cute good morning text", name1Pts: 3, name2Pts: 0 },
+            { text: "{name2} wakes up early and texts first", name1Pts: 0, name2Pts: 3 },
+            { text: "Both text each other at the exact same time!", name1Pts: 2, name2Pts: 2 }
+        ]
+    },
+    {
+        question: "When planning a surprise date night...",
+        options: [
+            { text: "{name1} secretly plans every single detail", name1Pts: 3, name2Pts: 0 },
+            { text: "{name2} brings all the spontaneous romantic ideas", name1Pts: 0, name2Pts: 3 },
+            { text: "They brainstorm and plan everything together", name1Pts: 2, name2Pts: 2 }
+        ]
+    },
+    {
+        question: "Who gets cute & jealous faster during friendly banter?",
+        options: [
+            { text: "{name1} gets super protective immediately", name1Pts: 3, name2Pts: 0 },
+            { text: "{name2} pretends not to care but secretly is jealous", name1Pts: 0, name2Pts: 3 },
+            { text: "Neither — total unshakeable trust!", name1Pts: 2, name2Pts: 2 }
+        ]
+    },
+    {
+        question: "Who double texts when left on read for 10 minutes?",
+        options: [
+            { text: "{name1} sends 5 follow-up funny memes", name1Pts: 3, name2Pts: 0 },
+            { text: "{name2} calls immediately to check if they're okay", name1Pts: 0, name2Pts: 3 },
+            { text: "Both wait patiently without stressing", name1Pts: 2, name2Pts: 2 }
+        ]
+    },
+    {
+        question: "Who says 'I love you' first during emotional moments?",
+        options: [
+            { text: "{name1} lets it slip out first", name1Pts: 3, name2Pts: 0 },
+            { text: "{name2} confesses deep feelings first", name1Pts: 0, name2Pts: 3 },
+            { text: "They blurt it out simultaneously!", name1Pts: 2, name2Pts: 2 }
+        ]
+    },
+    {
+        question: "Who initiates hand-holding first in public?",
+        options: [
+            { text: "{name1} reaches out without hesitating", name1Pts: 3, name2Pts: 0 },
+            { text: "{name2} softly grabs the other's hand first", name1Pts: 0, name2Pts: 3 },
+            { text: "Their hands brush and interlock automatically", name1Pts: 2, name2Pts: 2 }
+        ]
+    },
+    {
+        question: "Who remembers every single anniversary & tiny detail?",
+        options: [
+            { text: "{name1} keeps a secret notes app full of details", name1Pts: 3, name2Pts: 0 },
+            { text: "{name2} never forgets a single date or memory", name1Pts: 0, name2Pts: 3 },
+            { text: "Both have flawless memory for relationship milestones", name1Pts: 2, name2Pts: 2 }
+        ]
+    },
+    {
+        question: "After a tiny misunderstanding, who apologizes first?",
+        options: [
+            { text: "{name1} can't stay mad for more than 5 minutes", name1Pts: 3, name2Pts: 0 },
+            { text: "{name2} brings peace offerings and warm hugs", name1Pts: 0, name2Pts: 3 },
+            { text: "Both laugh and say sorry at the exact same moment", name1Pts: 2, name2Pts: 2 }
+        ]
+    },
+    {
+        question: "Who spends weeks searching for the ultimate birthday gift?",
+        options: [
+            { text: "{name1} prepares emotional handmade surprises", name1Pts: 3, name2Pts: 0 },
+            { text: "{name2} finds the dream gift way ahead of time", name1Pts: 0, name2Pts: 3 },
+            { text: "Both go completely over the top with gifts", name1Pts: 2, name2Pts: 2 }
+        ]
+    },
+    {
+        question: "Who gets caught staring when the other isn't looking?",
+        options: [
+            { text: "{name1} gets caught admiring {name2} constantly", name1Pts: 3, name2Pts: 0 },
+            { text: "{name2} blushes when caught staring deeply", name1Pts: 0, name2Pts: 3 },
+            { text: "Both catch each other staring and smiling", name1Pts: 2, name2Pts: 2 }
+        ]
+    }
+];
+
+function initWhoFallsFirstGame() {
+    whoFallsState.currentSituationIndex = 0;
+    whoFallsState.name1FallScore = 0;
+    whoFallsState.name2FallScore = 0;
+
+    const meterName1 = document.getElementById('meterName1');
+    const meterName2 = document.getElementById('meterName2');
+    const resultCard = document.getElementById('game4ResultCard');
+    const situationCard = document.getElementById('situationCard');
+
+    if (meterName1) meterName1.textContent = gameState.name1 || 'Name 1';
+    if (meterName2) meterName2.textContent = gameState.name2 || 'Name 2';
+
+    if (resultCard) resultCard.style.display = 'none';
+    if (situationCard) situationCard.style.display = 'block';
+
+    updateLoveMeterUI();
+    renderCurrentSituation();
+}
+
+function updateLoveMeterUI() {
+    const fill = document.getElementById('loveBalanceFill');
+    const statusText = document.getElementById('meterStatusText');
+
+    const n1 = whoFallsState.name1FallScore;
+    const n2 = whoFallsState.name2FallScore;
+    const total = n1 + n2;
+
+    let percentage = 50;
+    if (total > 0) {
+        percentage = Math.round((n1 / total) * 100);
+    }
+
+    // Keep fill visually bounded between 15% and 85% for nice UI appearance
+    const visualWidth = Math.max(15, Math.min(85, percentage));
+    if (fill) fill.style.width = visualWidth + '%';
+
+    if (statusText) {
+        if (percentage > 58) {
+            statusText.textContent = `${gameState.name1 || 'Name 1'} is falling faster! 🔥`;
+        } else if (percentage < 42) {
+            statusText.textContent = `${gameState.name2 || 'Name 2'} is falling faster! 🔥`;
+        } else {
+            statusText.textContent = `Love tendency balanced 💕`;
+        }
+    }
+}
+
+function renderCurrentSituation() {
+    const counterEl = document.getElementById('situationCounter');
+    const questionEl = document.getElementById('situationQuestion');
+    const optionsContainer = document.getElementById('situationOptions');
+
+    if (whoFallsState.currentSituationIndex >= whoFallsSituations.length) {
+        finishWhoFallsGame();
+        return;
+    }
+
+    const current = whoFallsSituations[whoFallsState.currentSituationIndex];
+
+    if (counterEl) {
+        counterEl.textContent = `Situation ${whoFallsState.currentSituationIndex + 1} of ${whoFallsSituations.length}`;
+    }
+
+    // Replace name placeholders
+    const questionText = current.question
+        .replace(/{name1}/g, gameState.name1 || 'Name 1')
+        .replace(/{name2}/g, gameState.name2 || 'Name 2');
+
+    if (questionEl) questionEl.textContent = questionText;
+
+    if (optionsContainer) {
+        optionsContainer.innerHTML = '';
+        current.options.forEach((opt) => {
+            const optText = opt.text
+                .replace(/{name1}/g, gameState.name1 || 'Name 1')
+                .replace(/{name2}/g, gameState.name2 || 'Name 2');
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn-option';
+            btn.textContent = optText;
+            btn.onclick = () => selectSituationOption(opt.name1Pts, opt.name2Pts);
+            optionsContainer.appendChild(btn);
+        });
+    }
+}
+
+function selectSituationOption(name1Pts, name2Pts) {
+    whoFallsState.name1FallScore += name1Pts;
+    whoFallsState.name2FallScore += name2Pts;
+
+    updateLoveMeterUI();
+
+    whoFallsState.currentSituationIndex++;
+    if (whoFallsState.currentSituationIndex < whoFallsSituations.length) {
+        renderCurrentSituation();
+    } else {
+        finishWhoFallsGame();
+    }
+}
+
+function finishWhoFallsGame() {
+    const situationCard = document.getElementById('situationCard');
+    const resultCard = document.getElementById('game4ResultCard');
+    const winnerEl = document.getElementById('whoFallsWinner');
+    const subtitleEl = document.getElementById('whoFallsSubtitle');
+    const breakdownName1 = document.getElementById('breakdownName1');
+    const breakdownPercent1 = document.getElementById('breakdownPercent1');
+    const fallingFill1 = document.getElementById('fallingFill1');
+    const breakdownName2 = document.getElementById('breakdownName2');
+    const breakdownPercent2 = document.getElementById('breakdownPercent2');
+    const fallingFill2 = document.getElementById('fallingFill2');
+
+    const n1 = whoFallsState.name1FallScore;
+    const n2 = whoFallsState.name2FallScore;
+    const total = n1 + n2;
+
+    let p1 = 50;
+    let p2 = 50;
+    if (total > 0) {
+        p1 = Math.round((n1 / total) * 100);
+        p2 = 100 - p1;
+    }
+
+    if (situationCard) situationCard.style.display = 'none';
+    if (resultCard) resultCard.style.display = 'block';
+
+    if (breakdownName1) breakdownName1.textContent = gameState.name1 || 'Name 1';
+    if (breakdownPercent1) breakdownPercent1.textContent = p1 + '%';
+    if (fallingFill1) fallingFill1.style.width = p1 + '%';
+
+    if (breakdownName2) breakdownName2.textContent = gameState.name2 || 'Name 2';
+    if (breakdownPercent2) breakdownPercent2.textContent = p2 + '%';
+    if (fallingFill2) fallingFill2.style.width = p2 + '%';
+
+    if (Math.abs(p1 - p2) <= 8) {
+        if (winnerEl) winnerEl.textContent = `You Both Fall Together! 💕`;
+        if (subtitleEl) subtitleEl.textContent = `Equally obsessed with each other! 💘`;
+    } else if (p1 > p2) {
+        if (winnerEl) winnerEl.textContent = `${gameState.name1 || 'Name 1'} Falls First! 💘`;
+        if (subtitleEl) subtitleEl.textContent = `And they fall HARD. 💀❤️`;
+    } else {
+        if (winnerEl) winnerEl.textContent = `${gameState.name2 || 'Name 2'} Falls First! 💘`;
+        if (subtitleEl) subtitleEl.textContent = `And they fall HARD. 💀❤️`;
+    }
+
+    // Calculate score for Game 4 out of 35 max points (max achievable points in quiz is 30)
+    const game4Points = Math.min(35, Math.round((total / 30) * 35));
+    gameState.scores.game4 = game4Points;
+}
+
+function finishGame4AndShowFinalResults() {
+    switchScreen('game4Screen', 'resultScreen');
+    showFinalResult();
 }
 
 // ============= FINAL RESULT =============
 function showFinalResult() {
-    switchScreen('game3Screen', 'resultScreen');
+    switchScreen('game4Screen', 'resultScreen');
     
-    // Calculate total score
-    const totalScore = gameState.scores.game1 + gameState.scores.game2 + gameState.scores.game3;
+    // Calculate total score across all 4 games (max 140 points)
+    const totalScore = gameState.scores.game1 + gameState.scores.game2 + gameState.scores.game3 + gameState.scores.game4;
     
-    // Calculate percentage (max 105 points possible, scale to 100)
-    const percentage = Math.min(100, Math.round((totalScore / 105) * 100));
+    // Calculate final percentage (max 140 points possible, scale to 100)
+    const percentage = Math.min(100, Math.round((totalScore / 140) * 100));
     gameState.finalPercentage = percentage;
     
     // Save to Firebase Firestore (non-blocking, failsafed)
@@ -604,9 +962,11 @@ function showFinalResult() {
     const score1El = document.getElementById('score1');
     const score2El = document.getElementById('score2');
     const score3El = document.getElementById('score3');
+    const score4El = document.getElementById('score4');
     if (score1El) score1El.textContent = gameState.scores.game1;
     if (score2El) score2El.textContent = gameState.scores.game2;
     if (score3El) score3El.textContent = gameState.scores.game3;
+    if (score4El) score4El.textContent = gameState.scores.game4;
     
     // Animate percentage
     animatePercentage(percentage);
@@ -699,9 +1059,17 @@ function resetCalculator() {
         scores: {
             game1: 0,
             game2: 0,
-            game3: 0
+            game3: 0,
+            game4: 0
         },
         finalPercentage: 0
+    };
+
+    whoFallsState = {
+        currentSituationIndex: 0,
+        name1FallScore: 0,
+        name2FallScore: 0,
+        totalSituations: 10
     };
     
     // Clear inputs
@@ -724,6 +1092,10 @@ window.startGame1 = startGame1;
 window.clearGuess = clearGuess;
 window.submitWord = submitWord;
 window.shootArrow = shootArrow;
+window.initWhoFallsFirstGame = initWhoFallsFirstGame;
+window.selectSituationOption = selectSituationOption;
+window.finishWhoFallsGame = finishWhoFallsGame;
+window.finishGame4AndShowFinalResults = finishGame4AndShowFinalResults;
 window.showFinalResult = showFinalResult;
 window.resetCalculator = resetCalculator;
 window.navigateTo = navigateTo;

@@ -12,10 +12,13 @@ const firebaseConfig = {
 
 let firebaseDb = null;
 let currentAttemptDocId = null;
+let initAttemptPromise = null;
+let hasSavedCurrentResult = false;
 
 async function getFirebaseDb() {
     if (firebaseDb) return firebaseDb;
     try {
+        console.log("[LOVE FIREBASE] Initializing Firebase...");
         const { initializeApp, getApps, getApp } = await import(
             "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js"
         );
@@ -26,69 +29,76 @@ async function getFirebaseDb() {
         const apps = getApps();
         const app = apps.length > 0 ? getApp() : initializeApp(firebaseConfig);
         firebaseDb = getFirestore(app);
-        console.log("Firebase initialized successfully.");
+        console.log("[LOVE FIREBASE] Firebase initialized successfully.");
         return firebaseDb;
     } catch (error) {
-        console.error("Firebase initialization failed:", error);
+        console.error("[LOVE FIREBASE ERROR] Firebase initialization failed:", error);
         return null;
     }
 }
 
 // Step 1: Immediately create ONE document in Firestore as soon as names are submitted
 async function initFirebaseAttempt(name1, name2) {
-    try {
-        console.log("Creating Love Calculator attempt...");
-        const db = await getFirebaseDb();
-        if (!db) {
-            console.warn("Firestore instance not available.");
+    hasSavedCurrentResult = false;
+    currentAttemptDocId = null;
+
+    console.log("[LOVE FIREBASE] Creating attempt");
+    initAttemptPromise = (async () => {
+        try {
+            const db = await getFirebaseDb();
+            if (!db) {
+                console.warn("[LOVE FIREBASE] Firestore instance not available for init.");
+                return null;
+            }
+
+            const { collection, addDoc, serverTimestamp } = await import(
+                "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
+            );
+
+            const payload = {
+                name1: name1,
+                name2: name2,
+                startedAt: serverTimestamp(),
+                createdAt: serverTimestamp(), // Preserved for existing analytics compatibility
+                game1Score: 0,
+                game1Completed: false,
+                game2Score: 0,
+                game2Completed: false,
+                game3Score: 0,
+                game3Completed: false,
+                game4Score: 0,
+                game4Completed: false,
+                finalPercentage: 0,
+                completed: false
+            };
+
+            const docRef = await addDoc(collection(db, "loveCalculatorAttempts"), payload);
+            currentAttemptDocId = docRef.id;
+            console.log("[LOVE FIREBASE] Attempt created:", currentAttemptDocId);
+            return currentAttemptDocId;
+        } catch (error) {
+            console.error("[LOVE FIREBASE ERROR] Error creating initial attempt:", error);
             return null;
         }
+    })();
 
-        const { collection, doc, setDoc, serverTimestamp } = await import(
-            "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
-        );
-
-        // Generate client-side document reference & ID synchronously
-        const attemptRef = doc(collection(db, "loveCalculatorAttempts"));
-        currentAttemptDocId = attemptRef.id;
-        console.log("Attempt created:", currentAttemptDocId);
-
-        // Save initial attempt document with merge: true to work with existing Firestore permissions
-        await setDoc(attemptRef, {
-            name1: name1,
-            name2: name2,
-            startedAt: serverTimestamp(),
-            createdAt: serverTimestamp(), // Preserved for existing analytics compatibility
-            game1Score: 0,
-            game1Completed: false,
-            game2Score: 0,
-            game2Completed: false,
-            game3Score: 0,
-            game3Completed: false,
-            game4Score: 0,
-            game4Completed: false,
-            finalPercentage: 0,
-            completed: false
-        }, { merge: true });
-
-        console.log("Initial attempt document saved to Firestore successfully:", currentAttemptDocId);
-        return currentAttemptDocId;
-    } catch (error) {
-        console.error("Error creating initial Firestore attempt document:", error);
-        return null;
-    }
+    return initAttemptPromise;
 }
 
-// Incremental Updates: Update the SAME document as each game progresses
+// Incremental Updates: Update the SAME document as each game progresses (Strictly 1 Document Per Attempt)
 async function updateFirebaseAttempt(updateFields) {
-    if (!currentAttemptDocId) {
-        console.warn("No active attempt ID available to update.");
-        return;
-    }
-
     try {
+        if (initAttemptPromise) {
+            await initAttemptPromise;
+        }
+
+        if (!currentAttemptDocId) {
+            console.warn("[LOVE FIREBASE] No active attempt ID available to update.");
+            return false;
+        }
+
         const db = await getFirebaseDb();
-        if (!db) return;
+        if (!db) return false;
 
         const { doc, setDoc } = await import(
             "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
@@ -96,28 +106,41 @@ async function updateFirebaseAttempt(updateFields) {
 
         const attemptRef = doc(db, "loveCalculatorAttempts", currentAttemptDocId);
         await setDoc(attemptRef, updateFields, { merge: true });
-        console.log(`Updated attempt [${currentAttemptDocId}] in Firestore:`, updateFields);
+        return true;
     } catch (error) {
-        // Firebase failure must NEVER break the Love Calculator experience.
-        console.error("Error updating Firestore attempt document:", error);
+        console.error("[LOVE FIREBASE ERROR] Error updating attempt document:", error);
+        return false;
     }
 }
 
-// Step 6: Final completion update when results screen is shown
+// Step 6: Final completion save - updates the SAME document (Zero duplicate document creation)
 async function saveLoveCalculatorResult() {
+    if (hasSavedCurrentResult) return;
+
+    console.log("[LOVE FIREBASE] Saving final result");
     try {
-        console.log("Saving Final Result...");
         const { serverTimestamp } = await import(
             "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
         );
-        await updateFirebaseAttempt({
+
+        const success = await updateFirebaseAttempt({
+            name1: gameState.name1,
+            name2: gameState.name2,
+            game1Score: gameState.scores.game1,
+            game2Score: gameState.scores.game2,
+            game3Score: gameState.scores.game3,
+            game4Score: gameState.scores.game4,
             finalPercentage: gameState.finalPercentage,
             completedAt: serverTimestamp(),
             completed: true
         });
-        console.log("Final Result saved");
+
+        if (success) {
+            hasSavedCurrentResult = true;
+            console.log("[LOVE FIREBASE] Final result saved");
+        }
     } catch (error) {
-        console.error("Error saving final Love Calculator result:", error);
+        console.error("[LOVE FIREBASE ERROR] Error saving final result to Firestore:", error);
     }
 }
 
@@ -248,7 +271,7 @@ function startLoveTest() {
     gameState.name2 = name2;
     
     // Immediately initialize ONE Firestore document for this attempt
-    initFirebaseAttempt(name1, name2).catch(err => console.error("Firebase init attempt error:", err));
+    initFirebaseAttempt(name1, name2).catch(err => console.error("[LOVE FIREBASE ERROR] init attempt error:", err));
     
     switchScreen('welcomeScreen', 'instructionsScreen');
 }
@@ -427,11 +450,13 @@ function endMemoryGame() {
     gameState.scores.game1 = score;
     
     // Immediately update SAME Firestore document for Game 1 completion
-    console.log("Saving Game 1...");
+    console.log("[LOVE FIREBASE] Saving Game 1");
     updateFirebaseAttempt({
         game1Score: score,
         game1Completed: true
-    }).then(() => console.log("Game 1 saved")).catch(err => console.error("Firebase Game 1 update error:", err));
+    }).then((success) => {
+        if (success !== false) console.log("[LOVE FIREBASE] Game 1 saved");
+    }).catch(err => console.error("[LOVE FIREBASE ERROR] Game 1 update error:", err));
 
     let message = '';
     if(score >= 30) {
@@ -579,11 +604,13 @@ function submitWord() {
         gameState.scores.game2 = score;
         
         // Immediately update SAME Firestore document for Game 2 completion
-        console.log("Saving Game 2...");
+        console.log("[LOVE FIREBASE] Saving Game 2");
         updateFirebaseAttempt({
             game2Score: score,
             game2Completed: true
-        }).then(() => console.log("Game 2 saved")).catch(err => console.error("Firebase Game 2 update error:", err));
+        }).then((success) => {
+            if (success !== false) console.log("[LOVE FIREBASE] Game 2 saved");
+        }).catch(err => console.error("[LOVE FIREBASE ERROR] Game 2 update error:", err));
 
         let message = '';
         if(score >= 30) {
@@ -744,11 +771,13 @@ function shootArrow() {
     gameState.scores.game3 = totalScore;
     
     // Immediately update SAME Firestore document for Game 3 completion
-    console.log("Saving Game 3...");
+    console.log("[LOVE FIREBASE] Saving Game 3");
     updateFirebaseAttempt({
         game3Score: totalScore,
         game3Completed: true
-    }).then(() => console.log("Game 3 saved")).catch(err => console.error("Firebase Game 3 update error:", err));
+    }).then((success) => {
+        if (success !== false) console.log("[LOVE FIREBASE] Game 3 saved");
+    }).catch(err => console.error("[LOVE FIREBASE ERROR] Game 3 update error:", err));
 
     // Update score display
     const arrowScoreEl = document.getElementById('arrowScore');
@@ -1018,11 +1047,13 @@ function finishWhoFallsGame() {
     gameState.scores.game4 = game4Points;
 
     // Immediately update SAME Firestore document for Game 4 completion
-    console.log("Saving Game 4...");
+    console.log("[LOVE FIREBASE] Saving Game 4");
     updateFirebaseAttempt({
         game4Score: game4Points,
         game4Completed: true
-    }).then(() => console.log("Game 4 saved")).catch(err => console.error("Firebase Game 4 update error:", err));
+    }).then((success) => {
+        if (success !== false) console.log("[LOVE FIREBASE] Game 4 saved");
+    }).catch(err => console.error("[LOVE FIREBASE ERROR] Game 4 update error:", err));
 }
 
 function finishGame4AndShowFinalResults() {
@@ -1042,7 +1073,7 @@ function showFinalResult() {
     gameState.finalPercentage = percentage;
     
     // Save to Firebase Firestore (non-blocking, failsafed)
-    saveLoveCalculatorResult().catch(err => console.error("Firebase save error:", err));
+    saveLoveCalculatorResult().catch(err => console.error("[LOVE FIREBASE ERROR] Final save error:", err));
     
     // Display names
     const finalName1El = document.getElementById('finalName1');
@@ -1144,7 +1175,9 @@ function switchScreen(currentScreen, nextScreen) {
 }
 
 function resetCalculator() {
-    currentAttemptDocId = null; // Clear active attempt document ID for fresh attempt
+    hasSavedCurrentResult = false;
+    currentAttemptDocId = null;
+    initAttemptPromise = null;
     gameState = {
         name1: '',
         name2: '',

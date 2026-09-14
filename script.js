@@ -11,7 +11,8 @@ const firebaseConfig = {
 };
 
 let firebaseDb = null;
-let hasSavedCurrentResult = false;
+let currentAttemptDocId = null;
+let initAttemptPromise = null;
 
 async function getFirebaseDb() {
     if (firebaseDb) return firebaseDb;
@@ -32,33 +33,89 @@ async function getFirebaseDb() {
     }
 }
 
-async function saveLoveCalculatorResult() {
-    if (hasSavedCurrentResult) return;
-    hasSavedCurrentResult = true;
+// Step 1: Immediately create ONE document in Firestore as soon as names are submitted
+async function initFirebaseAttempt(name1, name2) {
+    currentAttemptDocId = null;
+    initAttemptPromise = (async () => {
+        try {
+            const db = await getFirebaseDb();
+            if (!db) return null;
 
+            const { collection, addDoc, serverTimestamp } = await import(
+                "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
+            );
+
+            const docRef = await addDoc(collection(db, "loveCalculatorAttempts"), {
+                name1: name1,
+                name2: name2,
+                startedAt: serverTimestamp(),
+                createdAt: serverTimestamp(), // Preserved for existing analytics compatibility
+                game1Score: 0,
+                game1Completed: false,
+                game2Score: 0,
+                game2Completed: false,
+                game3Score: 0,
+                game3Completed: false,
+                game4Score: 0,
+                game4Completed: false,
+                finalPercentage: 0,
+                completed: false
+            });
+
+            currentAttemptDocId = docRef.id;
+            console.log("Started Firestore attempt session document:", currentAttemptDocId);
+            return currentAttemptDocId;
+        } catch (error) {
+            console.error("Error creating initial Firestore attempt document:", error);
+            return null;
+        }
+    })();
+
+    return initAttemptPromise;
+}
+
+// Incremental Updates: Update the SAME document as each game progresses
+async function updateFirebaseAttempt(updateFields) {
     try {
-        const db = await getFirebaseDb();
-        if (!db) {
-            console.warn("Firestore instance not available.");
+        if (initAttemptPromise) {
+            await initAttemptPromise;
+        }
+
+        if (!currentAttemptDocId) {
+            console.warn("No active Firestore attempt document ID found to update.");
             return;
         }
-        const { collection, addDoc, serverTimestamp } = await import(
+
+        const db = await getFirebaseDb();
+        if (!db) return;
+
+        const { doc, updateDoc } = await import(
             "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
         );
-        await addDoc(collection(db, "loveCalculatorAttempts"), {
-            name1: gameState.name1,
-            name2: gameState.name2,
-            game1Score: gameState.scores.game1,
-            game2Score: gameState.scores.game2,
-            game3Score: gameState.scores.game3,
-            game4Score: gameState.scores.game4,
-            finalPercentage: gameState.finalPercentage,
-            createdAt: serverTimestamp()
-        });
-        console.log("Love Calculator result saved to Firestore successfully.");
+
+        const docRef = doc(db, "loveCalculatorAttempts", currentAttemptDocId);
+        await updateDoc(docRef, updateFields);
+        console.log(`Updated Firestore attempt [${currentAttemptDocId}]:`, updateFields);
     } catch (error) {
         // Firebase failure must NEVER break the Love Calculator experience.
-        console.error("Error saving result to Firestore:", error);
+        console.error("Error updating Firestore attempt document:", error);
+    }
+}
+
+// Step 6: Final completion update when results screen is shown
+async function saveLoveCalculatorResult() {
+    try {
+        const { serverTimestamp } = await import(
+            "https://www.gstatic.com/firebasejs/12.0.0/firebase-firestore.js"
+        );
+        await updateFirebaseAttempt({
+            finalPercentage: gameState.finalPercentage,
+            completedAt: serverTimestamp(),
+            completed: true
+        });
+        console.log("Love Calculator final result saved to Firestore successfully.");
+    } catch (error) {
+        console.error("Error saving final Love Calculator result:", error);
     }
 }
 
@@ -185,9 +242,11 @@ function startLoveTest() {
         return;
     }
     
-    hasSavedCurrentResult = false; // Reset duplicate save guard for new attempt
     gameState.name1 = name1;
     gameState.name2 = name2;
+    
+    // Immediately initialize ONE Firestore document for this attempt
+    initFirebaseAttempt(name1, name2).catch(err => console.error("Firebase init attempt error:", err));
     
     switchScreen('welcomeScreen', 'instructionsScreen');
 }
@@ -365,6 +424,12 @@ function endMemoryGame() {
     score = Math.max(15, score); // Minimum 15 points
     gameState.scores.game1 = score;
     
+    // Immediately update SAME Firestore document for Game 1 completion
+    updateFirebaseAttempt({
+        game1Score: score,
+        game1Completed: true
+    }).catch(err => console.error("Firebase Game 1 update error:", err));
+
     let message = '';
     if(score >= 30) {
         message = `🌟 Amazing Memory! Completed in ${memoryGame.timer}s with ${memoryGame.moves} moves! Perfect sync! +${score} pts`;
@@ -510,6 +575,12 @@ function submitWord() {
         score = Math.max(15, score);
         gameState.scores.game2 = score;
         
+        // Immediately update SAME Firestore document for Game 2 completion
+        updateFirebaseAttempt({
+            game2Score: score,
+            game2Completed: true
+        }).catch(err => console.error("Firebase Game 2 update error:", err));
+
         let message = '';
         if(score >= 30) {
             message = `🎯 Perfect! Got it in ${timeTaken}s on attempt ${wordGame.attempts}! Mind connection! +${score} pts`;
@@ -668,6 +739,12 @@ function shootArrow() {
     arrowGame.score = totalScore;
     gameState.scores.game3 = totalScore;
     
+    // Immediately update SAME Firestore document for Game 3 completion
+    updateFirebaseAttempt({
+        game3Score: totalScore,
+        game3Completed: true
+    }).catch(err => console.error("Firebase Game 3 update error:", err));
+
     // Update score display
     const arrowScoreEl = document.getElementById('arrowScore');
     if (arrowScoreEl) arrowScoreEl.textContent = totalScore;
@@ -934,6 +1011,12 @@ function finishWhoFallsGame() {
     // Calculate score for Game 4 out of 35 max points (max achievable points in quiz is 30)
     const game4Points = Math.min(35, Math.round((total / 30) * 35));
     gameState.scores.game4 = game4Points;
+
+    // Immediately update SAME Firestore document for Game 4 completion
+    updateFirebaseAttempt({
+        game4Score: game4Points,
+        game4Completed: true
+    }).catch(err => console.error("Firebase Game 4 update error:", err));
 }
 
 function finishGame4AndShowFinalResults() {
@@ -1055,7 +1138,8 @@ function switchScreen(currentScreen, nextScreen) {
 }
 
 function resetCalculator() {
-    hasSavedCurrentResult = false; // Reset duplicate save guard for new attempt
+    currentAttemptDocId = null; // Clear active attempt document ID for fresh attempt
+    initAttemptPromise = null;
     gameState = {
         name1: '',
         name2: '',
@@ -1106,6 +1190,8 @@ window.toggleMobileMenu = toggleMobileMenu;
 window.closeMobileMenu = closeMobileMenu;
 window.generateNewLoveFact = generateNewLoveFact;
 window.saveLoveCalculatorResult = saveLoveCalculatorResult;
+window.initFirebaseAttempt = initFirebaseAttempt;
+window.updateFirebaseAttempt = updateFirebaseAttempt;
 
 // Keyboard support & document setup
 document.addEventListener('DOMContentLoaded', function() {

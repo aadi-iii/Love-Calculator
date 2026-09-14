@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Security Rules for loveCalculatorAttempts collection
+    match /loveCalculatorAttempts/{attemptId} {
+      
+      // Allow public creation of new attempts (must specify name1 and name2 strings)
+      allow create: if request.resource.data.name1 is string
+                    && request.resource.data.name2 is string;
+
+      // Allow updating the same attempt document as games are completed
+      allow update: if resource != null;
+
+      // Prevent public reading, listing, or deleting of attempts for user privacy & security
+      allow read, delete: if false;
+    }
+  }
+}
